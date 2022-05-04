@@ -1,0 +1,108 @@
+import cv2
+import mediapipe
+#import pandas as pd
+from utils.dataset_utils import load_dataset, load_reference_signs
+from utils.mediapipe_utils import mediapipe_detection
+from sign_recorder import SignRecorder
+from webcam_manager import WebcamManager
+import time
+from gtts import gTTS
+import os
+
+
+if __name__ == "__main__":
+    # Create dataset of the videos where landmarks have not been extracted yet
+    language = 'en'
+    start_time = time.time() #0.2
+    videos = load_dataset()
+    #print("------number of videos --- " + str(len(videos)))
+    print("--- %s seconds load dataset---" % (time.time() - start_time)) #0.6 - 0.2 = 0.4
+
+
+    # Create a DataFrame of reference signs (name: str, model: SignModel, distance: int)
+    start_time = time.time()
+    reference_signs = load_reference_signs(videos)
+    print("--- %s seconds load reference signs---" % (time.time() - start_time))
+
+    #reference_signs.to_csv(r"D:\Smart-Mirror\Code\SignSense\mediapipe2\Sign-Language-Recognition--MediaPipe-DTW\reference_signs2.csv")
+    start_time = time.time()
+    # Object that stores mediapipe results and computes sign similarities
+    sign_recorder = SignRecorder(reference_signs)
+    print("--- %s seconds stores mediapipe results--" % (time.time() - start_time))
+
+
+    # Object that draws keypoints & displays results
+    start_time = time.time()
+    webcam_manager = WebcamManager()
+    print("--- %s seconds draws keypoints & displays results--" % (time.time() - start_time))
+
+    # Turn on the webcam
+    cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+    # Set up the Mediapipe environment
+    with mediapipe.solutions.holistic.Holistic(
+        min_detection_confidence=0.5, min_tracking_confidence=0.5
+    ) as holistic:
+        a,b,c,d = [],[],[],[]
+        e = ''
+        signMem = ""
+        while cap.isOpened():
+
+            # Read feed
+            ret, frame = cap.read()
+
+            #start_time = time.time()
+            # Make detections
+            image, results = mediapipe_detection(frame, holistic)
+            #a.append(time.time() - start_time)
+
+            #start_time = time.time()
+            # Process results
+            sign_detected, is_recording = sign_recorder.process_results(results)
+
+            if(sign_detected != ""):
+                myobj = gTTS(text=sign_detected, lang=language, slow=False)
+                myobj.save('audio.mp3')
+                os.system("audio.mp3")
+
+            #b.append(time.time() - start_time)
+
+            signMem = signMem + sign_detected
+
+
+            # Update the frame (draw landmarks & display result)
+            webcam_manager.update(frame, results, signMem, is_recording)
+            #c.append(time.time() - start_time)
+
+            pressedKey = cv2.waitKey(1) & 0xFF
+            #if pressedKey == ord("r"):
+            start_time = time.time()
+                # Record pressing r
+            sign_recorder.record()
+            d.append(time.time() - start_time)
+            if pressedKey == ord("q"):  # Break pressing q
+                break
+
+        cap.release()
+        cv2.destroyAllWindows()
+
+        myobj = gTTS(text=signMem, lang=language, slow=False)
+        myobj.save('audio2.mp3')
+        os.system("audio2.mp3")
+
+        # Saving the converted audio in a mp3 file named
+        # welcome
+
+
+        # Playing the converted file
+
+
+        #data = {'detection-time': a,
+                #'process_results': b,
+                #'frame-update': c}
+
+        #data2 = {'detection-time': d}
+        #new_df = pd.DataFrame(data)
+        #new_df2 = pd.DataFrame(data2)
+        #new_df.to_csv(r'D:\Smart-Mirror\Code\SignSense\mediapipe2 - Copy\Sign-Language-Recognition--MediaPipe-DTW\times.csv')
+        #new_df2.to_csv(
+            #r'D:\Smart-Mirror\Code\SignSense\mediapipe2 - Copy\Sign-Language-Recognition--MediaPipe-DTW\times2.csv')
